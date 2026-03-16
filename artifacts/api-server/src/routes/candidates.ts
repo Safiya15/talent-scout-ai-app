@@ -7,7 +7,7 @@ import {
 
 const router: IRouter = Router();
 
-const GEMINI_API_KEY = "AIzaSyDnF_mN5FNiFILVvXJaZGF7uMBxdMN9VcU";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const SHEETS_WEBHOOK_URL =
   "https://script.google.com/macros/s/AKfycbzHcIGi6-wQMJH3CKFSlZTTJE0AD2icjjqII2M4SV8VQPSJIVMOqIaBuWU8tKevaPSS/exec";
 
@@ -134,6 +134,11 @@ router.post("/generate-message", async (req, res) => {
     return;
   }
 
+  if (!GEMINI_API_KEY) {
+    res.status(500).json({ error: "GEMINI_API_KEY environment secret is not set." });
+    return;
+  }
+
   const { name, skills, experience, currentCompany } = parsed.data;
 
   const prompt = `Write a short, personalized LinkedIn outreach message to a candidate for a technical role. Keep it professional, warm, and under 150 words.
@@ -148,7 +153,7 @@ The message should mention their specific skills and experience, express genuine
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,9 +164,13 @@ The message should mention their specific skills and experience, express genuine
     );
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini API error:", errText);
-      res.status(500).json({ error: "Failed to generate message", details: errText });
+      const errJson = await response.json().catch(() => null) as { error?: { code?: number; message?: string; status?: string } } | null;
+      const errMessage = errJson?.error?.message ?? "Unknown Gemini API error";
+      const errStatus = errJson?.error?.status ?? "ERROR";
+      console.error("Gemini API error:", JSON.stringify(errJson, null, 2));
+
+      const status = errJson?.error?.code === 429 ? 429 : 500;
+      res.status(status).json({ error: errMessage, status: errStatus });
       return;
     }
 

@@ -123,9 +123,13 @@ export default function Results() {
       setDialogData({ isOpen: true, message: res.message, name: candidate.name });
 
     } catch (error: any) {
+      const msg: string = error?.message ?? "";
+      const isQuota = msg.includes("quota") || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED");
       toast({
-        title: "Generation Failed",
-        description: error.message || "Could not generate message.",
+        title: isQuota ? "Quota Limit Reached" : "Generation Failed",
+        description: isQuota
+          ? "Your Gemini API key has hit its free-tier daily limit. Please wait or add billing at ai.google.dev."
+          : msg || "Could not generate message.",
         variant: "destructive"
       });
     } finally {
