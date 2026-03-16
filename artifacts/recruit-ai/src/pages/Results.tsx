@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, AlertCircle, XCircle, Search, MessageSquare, 
-  ChevronRight, Loader2, Send, Mail
+  ChevronRight, Loader2, Send, Mail, Users
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useGenerateMessage, useSendToSheets } from "@workspace/api-client-react";
