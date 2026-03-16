@@ -7,7 +7,7 @@ import {
 
 const router: IRouter = Router();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 const SHEETS_WEBHOOK_URL =
   "https://script.google.com/macros/s/AKfycbzHcIGi6-wQMJH3CKFSlZTTJE0AD2icjjqII2M4SV8VQPSJIVMOqIaBuWU8tKevaPSS/exec";
 
@@ -134,8 +134,8 @@ router.post("/generate-message", async (req, res) => {
     return;
   }
 
-  if (!GEMINI_API_KEY) {
-    res.status(500).json({ error: "GEMINI_API_KEY environment secret is not set." });
+  if (!ANTHROPIC_API_KEY) {
+    res.status(500).json({ error: "ANTHROPIC_API_KEY environment secret is not set." });
     return;
   }
 
@@ -152,38 +152,37 @@ Candidate details:
 The message should mention their specific skills and experience, express genuine interest, and include a call to action to connect. Sign off as "RecruitAI Team".`;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      }
-    );
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
 
     if (!response.ok) {
-      const errJson = await response.json().catch(() => null) as { error?: { code?: number; message?: string; status?: string } } | null;
-      const errMessage = errJson?.error?.message ?? "Unknown Gemini API error";
-      const errStatus = errJson?.error?.status ?? "ERROR";
-      console.error("Gemini API error:", JSON.stringify(errJson, null, 2));
-
-      const status = errJson?.error?.code === 429 ? 429 : 500;
-      res.status(status).json({ error: errMessage, status: errStatus });
+      const errJson = await response.json().catch(() => null) as { error?: { type?: string; message?: string } } | null;
+      const errMessage = errJson?.error?.message ?? "Unknown Anthropic API error";
+      console.error("Anthropic API error:", JSON.stringify(errJson, null, 2));
+      const status = response.status === 429 ? 429 : 500;
+      res.status(status).json({ error: errMessage });
       return;
     }
 
     const data = (await response.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
-      }>;
+      content?: Array<{ type: string; text?: string }>;
     };
 
-    const message = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "Could not generate message.";
+    const message = data?.content?.find((b) => b.type === "text")?.text ?? "Could not generate message.";
     res.json({ message });
   } catch (err) {
-    console.error("Error calling Gemini:", err);
+    console.error("Error calling Anthropic:", err);
     res.status(500).json({ error: "Failed to generate message" });
   }
 });
