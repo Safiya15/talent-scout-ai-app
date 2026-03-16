@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "RecruitAI"
+version = "1.0.0"
+id = "artifacts/recruit-ai"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 23164
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/recruit-ai run dev"
+
+[services.env]
+PORT = "23164"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/recruit-ai", "run", "build"]
+publicDir = "artifacts/recruit-ai/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

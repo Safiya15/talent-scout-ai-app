@@ -1,0 +1,16 @@
+packages:
+  "papaparse": "Client-side CSV parsing"
+  "@types/papaparse": "Type definitions for papaparse"
+  "recharts": "For the pipeline dashboard pie chart"
+  "framer-motion": "For page transitions and interactive animations"
+  "clsx": "For conditional class merging"
+  "tailwind-merge": "For tailwind class merging conflicts"
+
+images:
+  - path: "artifacts/recruit-ai/public/images/hero-bg.png"
+    description: "Abstract dark navy background with subtle glowing cyan geometric lines, soft volumetric lighting, corporate and highly professional modern tech style"
+    aspect_ratio: "16:9"
+
+notes:
+  - Using generated React Query hooks from @workspace/api-client-react
+  - Expects CSV headers: Name, Skills, Experience, Education, Location, Current Company

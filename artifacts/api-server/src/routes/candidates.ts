@@ -1,0 +1,197 @@
+import { Router, type IRouter } from "express";
+import {
+  ScoreCandidatesBody,
+  GenerateMessageBody,
+  SendToSheetsBody,
+} from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+const GEMINI_API_KEY = "AIzaSyDnF_mN5FNiFILVvXJaZGF7uMBxdMN9VcU";
+const SHEETS_WEBHOOK_URL =
+  "https://script.google.com/macros/s/AKfycbzHcIGi6-wQMJH3CKFSlZTTJE0AD2icjjqII2M4SV8VQPSJIVMOqIaBuWU8tKevaPSS/exec";
+
+const SKILLS_KEYWORDS = ["react", "python", "nodejs", "typescript"];
+
+function scoreSkills(skills: string): number {
+  const lower = skills.toLowerCase();
+  const matched = SKILLS_KEYWORDS.filter((kw) => lower.includes(kw)).length;
+  return Math.round((matched / SKILLS_KEYWORDS.length) * 100);
+}
+
+function scoreExperience(experience: string): number {
+  const lower = experience.toLowerCase();
+  const yearsMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:year|yr)/);
+  if (!yearsMatch) {
+    if (lower.includes("fresh") || lower.includes("entry")) return 25;
+    return 25;
+  }
+  const years = parseFloat(yearsMatch[1]);
+  if (years > 5) return 100;
+  if (years >= 3) return 75;
+  if (years >= 1) return 50;
+  return 25;
+}
+
+function scoreEducation(education: string): number {
+  const lower = education.toLowerCase();
+  if (lower.includes("mtech") || lower.includes("m.tech") || lower.includes("m tech") || lower.includes("master")) return 100;
+  if (lower.includes("btech") || lower.includes("b.tech") || lower.includes("b tech") || lower.includes("bachelor of technology") || lower.includes("be ") || lower.includes("b.e")) return 80;
+  if (lower.includes("bsc") || lower.includes("b.sc") || lower.includes("b sc") || lower.includes("bachelor of science")) return 60;
+  return 40;
+}
+
+function scoreLocation(location: string): number {
+  const lower = location.toLowerCase();
+  if (lower.includes("ahmedabad") || lower.includes("bangalore") || lower.includes("bengaluru")) return 100;
+  const indiaKeywords = ["mumbai", "delhi", "pune", "hyderabad", "chennai", "kolkata", "india", "noida", "gurgaon", "gurugram", "surat", "jaipur", "lucknow"];
+  if (indiaKeywords.some((kw) => lower.includes(kw))) return 70;
+  return 40;
+}
+
+function determineStatus(score: number): "QUALIFIED" | "REVIEW" | "REJECTED" {
+  if (score >= 70) return "QUALIFIED";
+  if (score >= 40) return "REVIEW";
+  return "REJECTED";
+}
+
+router.post("/score", async (req, res) => {
+  const parsed = ScoreCandidatesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
+    return;
+  }
+
+  const { candidates } = parsed.data;
+
+  const scored = candidates.map((c) => {
+    const skillsScore = scoreSkills(c.skills);
+    const experienceScore = scoreExperience(c.experience);
+    const educationScore = scoreEducation(c.education);
+    const locationScore = scoreLocation(c.location);
+
+    const totalScore = Math.round(
+      skillsScore * 0.4 +
+      experienceScore * 0.3 +
+      educationScore * 0.2 +
+      locationScore * 0.1
+    );
+
+    const status = determineStatus(totalScore);
+
+    return {
+      name: c.name,
+      skills: c.skills,
+      experience: c.experience,
+      education: c.education,
+      location: c.location,
+      currentCompany: c.currentCompany,
+      score: totalScore,
+      status,
+      skillsScore,
+      experienceScore,
+      educationScore,
+      locationScore,
+      message: null,
+    };
+  });
+
+  const qualified = scored.filter((c) => c.status === "QUALIFIED").length;
+  const review = scored.filter((c) => c.status === "REVIEW").length;
+  const rejected = scored.filter((c) => c.status === "REJECTED").length;
+
+  res.json({
+    candidates: scored,
+    stats: {
+      total: scored.length,
+      qualified,
+      review,
+      rejected,
+      timeSavedMinutes: scored.length * 15,
+    },
+  });
+});
+
+router.post("/generate-message", async (req, res) => {
+  const parsed = GenerateMessageBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
+    return;
+  }
+
+  const { name, skills, experience, currentCompany } = parsed.data;
+
+  const prompt = `Write a short, personalized LinkedIn outreach message to a candidate for a technical role. Keep it professional, warm, and under 150 words.
+
+Candidate details:
+- Name: ${name}
+- Current Company: ${currentCompany}
+- Skills: ${skills}
+- Experience: ${experience}
+
+The message should mention their specific skills and experience, express genuine interest, and include a call to action to connect. Sign off as "RecruitAI Team".`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Gemini API error:", errText);
+      res.status(500).json({ error: "Failed to generate message", details: errText });
+      return;
+    }
+
+    const data = (await response.json()) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    };
+
+    const message = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "Could not generate message.";
+    res.json({ message });
+  } catch (err) {
+    console.error("Error calling Gemini:", err);
+    res.status(500).json({ error: "Failed to generate message" });
+  }
+});
+
+router.post("/send-to-sheets", async (req, res) => {
+  const parsed = SendToSheetsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.issues });
+    return;
+  }
+
+  const { name, score, skills, status, message } = parsed.data;
+
+  try {
+    const response = await fetch(SHEETS_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, score, skills, status, message: message ?? "" }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Sheets webhook error:", errText);
+      res.json({ success: false, message: `Webhook returned ${response.status}` });
+      return;
+    }
+
+    res.json({ success: true, message: "Successfully sent to Google Sheets" });
+  } catch (err) {
+    console.error("Error sending to Sheets:", err);
+    res.json({ success: false, message: "Failed to send to Google Sheets" });
+  }
+});
+
+export default router;

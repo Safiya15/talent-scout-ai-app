@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: RecruitAI API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: candidates
+    description: Candidate screening operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /candidates/score:
+    post:
+      operationId: scoreCandidates
+      tags: [candidates]
+      summary: Score candidates from CSV data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreCandidatesRequest"
+      responses:
+        "200":
+          description: Scored candidates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoreCandidatesResponse"
+  /candidates/generate-message:
+    post:
+      operationId: generateMessage
+      tags: [candidates]
+      summary: Generate personalized LinkedIn outreach message using Gemini
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateMessageRequest"
+      responses:
+        "200":
+          description: Generated message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateMessageResponse"
+  /candidates/send-to-sheets:
+    post:
+      operationId: sendToSheets
+      tags: [candidates]
+      summary: Send qualified candidate data to Google Sheets webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendToSheetsRequest"
+      responses:
+        "200":
+          description: Sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendToSheetsResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +88,161 @@ components:
           type: string
       required:
         - status
-
+    CandidateInput:
+      type: object
+      properties:
+        name:
+          type: string
+        skills:
+          type: string
+        experience:
+          type: string
+        education:
+          type: string
+        location:
+          type: string
+        currentCompany:
+          type: string
+      required:
+        - name
+        - skills
+        - experience
+        - education
+        - location
+        - currentCompany
+    ScoredCandidate:
+      type: object
+      properties:
+        name:
+          type: string
+        skills:
+          type: string
+        experience:
+          type: string
+        education:
+          type: string
+        location:
+          type: string
+        currentCompany:
+          type: string
+        score:
+          type: number
+        status:
+          type: string
+          enum: [QUALIFIED, REVIEW, REJECTED]
+        skillsScore:
+          type: number
+        experienceScore:
+          type: number
+        educationScore:
+          type: number
+        locationScore:
+          type: number
+        message:
+          type: string
+          nullable: true
+      required:
+        - name
+        - skills
+        - experience
+        - education
+        - location
+        - currentCompany
+        - score
+        - status
+        - skillsScore
+        - experienceScore
+        - educationScore
+        - locationScore
+    ScoreCandidatesRequest:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/CandidateInput"
+      required:
+        - candidates
+    ScoreCandidatesResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoredCandidate"
+        stats:
+          $ref: "#/components/schemas/PipelineStats"
+      required:
+        - candidates
+        - stats
+    PipelineStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        qualified:
+          type: integer
+        review:
+          type: integer
+        rejected:
+          type: integer
+        timeSavedMinutes:
+          type: integer
+      required:
+        - total
+        - qualified
+        - review
+        - rejected
+        - timeSavedMinutes
+    GenerateMessageRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        skills:
+          type: string
+        experience:
+          type: string
+        currentCompany:
+          type: string
+      required:
+        - name
+        - skills
+        - experience
+        - currentCompany
+    GenerateMessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+    SendToSheetsRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        score:
+          type: number
+        skills:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+          nullable: true
+      required:
+        - name
+        - score
+        - skills
+        - status
+    SendToSheetsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+        - message
