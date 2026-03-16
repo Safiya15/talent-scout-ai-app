@@ -11,25 +11,40 @@ const GEMINI_API_KEY = "AIzaSyDnF_mN5FNiFILVvXJaZGF7uMBxdMN9VcU";
 const SHEETS_WEBHOOK_URL =
   "https://script.google.com/macros/s/AKfycbzHcIGi6-wQMJH3CKFSlZTTJE0AD2icjjqII2M4SV8VQPSJIVMOqIaBuWU8tKevaPSS/exec";
 
-const SKILLS_KEYWORDS = ["react", "python", "nodejs", "typescript"];
+const SKILL_MATCHERS: Array<{ name: string; patterns: string[] }> = [
+  { name: "React",      patterns: ["react"] },
+  { name: "Python",     patterns: ["python"] },
+  { name: "NodeJS",     patterns: ["nodejs", "node.js", "node js", "node,", "node "] },
+  { name: "TypeScript", patterns: ["typescript", "ts,", "ts "] },
+];
 
 function scoreSkills(skills: string): number {
-  const lower = skills.toLowerCase();
-  const matched = SKILLS_KEYWORDS.filter((kw) => lower.includes(kw)).length;
-  return Math.round((matched / SKILLS_KEYWORDS.length) * 100);
+  const lower = skills.toLowerCase() + " ";
+  const matched = SKILL_MATCHERS.filter(({ patterns }) =>
+    patterns.some((p) => lower.includes(p))
+  ).length;
+  return Math.round((matched / SKILL_MATCHERS.length) * 100);
 }
 
 function scoreExperience(experience: string): number {
   const lower = experience.toLowerCase();
-  const yearsMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:year|yr)/);
-  if (!yearsMatch) {
-    if (lower.includes("fresh") || lower.includes("entry")) return 25;
+  // Match patterns like "4 years", "4+ years", "4yrs", "4+yrs", "4", "4+"
+  const yearsMatch = lower.match(/(\d+(?:\.\d+)?)\s*\+?\s*(?:year|yr|y\b)/);
+  const bareNumberMatch = lower.match(/^(\d+(?:\.\d+)?)\s*\+?$/);
+  const rawYears = yearsMatch
+    ? parseFloat(yearsMatch[1])
+    : bareNumberMatch
+    ? parseFloat(bareNumberMatch[1])
+    : null;
+
+  if (rawYears === null) {
+    if (lower.includes("fresh") || lower.includes("entry") || lower.includes("intern")) return 25;
     return 25;
   }
-  const years = parseFloat(yearsMatch[1]);
-  if (years > 5) return 100;
-  if (years >= 3) return 75;
-  if (years >= 1) return 50;
+  if (rawYears >= 5) return 100;
+  if (rawYears >= 4) return 85;
+  if (rawYears >= 3) return 75;
+  if (rawYears >= 1) return 50;
   return 25;
 }
 
