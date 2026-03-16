@@ -12,31 +12,46 @@ import { useToast } from "@/hooks/use-toast";
 
 // Dialog component inline for simplicity
 function MessageDialog({ isOpen, onClose, message, candidateName }: { isOpen: boolean, onClose: () => void, message: string, candidateName: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm" onClick={onClose}>
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         className="glass-panel w-full max-w-2xl rounded-2xl p-6 relative"
+        onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-xl font-display font-bold mb-4 flex items-center gap-2">
-          <Mail className="text-primary w-5 h-5" />
-          Outreach Message for {candidateName}
-        </h3>
-        <div className="bg-secondary/50 rounded-xl p-6 mb-6 text-foreground/90 whitespace-pre-wrap font-sans leading-relaxed border border-border">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-display font-bold flex items-center gap-2">
+            <Mail className="text-primary w-5 h-5" />
+            LinkedIn Outreach — {candidateName}
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors text-xl leading-none">✕</button>
+        </div>
+        <div className="bg-secondary/50 rounded-xl p-6 mb-6 text-foreground/90 whitespace-pre-wrap font-sans leading-relaxed border border-border text-sm">
           {message}
         </div>
         <div className="flex justify-end gap-3">
           <button 
-            onClick={() => {
-              navigator.clipboard.writeText(message);
-              onClose();
-            }}
-            className="px-4 py-2 rounded-lg font-medium bg-secondary hover:bg-secondary/80 text-foreground transition-colors"
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg font-medium bg-secondary hover:bg-secondary/80 text-foreground transition-colors text-sm"
           >
-            Copy & Close
+            Close
+          </button>
+          <button 
+            onClick={handleCopy}
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm"
+          >
+            {copied ? <><span>✓</span> Copied!</> : <><Send className="w-4 h-4" /> Copy Message</>}
           </button>
         </div>
       </motion.div>
@@ -124,11 +139,11 @@ export default function Results() {
 
     } catch (error: any) {
       const msg: string = error?.message ?? "";
-      const isQuota = msg.includes("quota") || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED");
+      const isQuota = msg.includes("quota") || msg.includes("rate") || msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED");
       toast({
-        title: isQuota ? "Quota Limit Reached" : "Generation Failed",
+        title: isQuota ? "Rate Limit Reached" : "Generation Failed",
         description: isQuota
-          ? "Your Gemini API key has hit its free-tier daily limit. Please wait or add billing at ai.google.dev."
+          ? "The AI API rate limit was hit. Please wait a moment and try again."
           : msg || "Could not generate message.",
         variant: "destructive"
       });
