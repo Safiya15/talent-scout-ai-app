@@ -1,9 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ScoredCandidate, PipelineStats } from '@workspace/api-client-react';
 
+export interface UploadRecord {
+  timestamp: string;
+  count: number;
+}
+
 interface CandidateContextType {
   candidates: ScoredCandidate[];
   stats: PipelineStats | null;
+  uploadHistory: UploadRecord[];
   setScoredData: (candidates: ScoredCandidate[], stats: PipelineStats) => void;
   updateCandidate: (name: string, updates: Partial<ScoredCandidate>) => void;
   clearData: () => void;
